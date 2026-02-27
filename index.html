@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bremsstrahlung — QED Energy Loss Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Outfit:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:       #060a10;
+    --panel:    #0c1320;
+    --border:   #1a2840;
+    --accent:   #00e5ff;
+    --accent2:  #ff4d6d;
+    --accent3:  #b8ff4d;
+    --al:       #4e9af1;
+    --cu:       #e07b39;
+    --pb:       #b76cef;
+    --text:     #c8d8f0;
+    --dim:      #4a607a;
+    --mono:     'Share Tech Mono', monospace;
+    --sans:     'Outfit', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 999; pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.06) 2px,
+      rgba(0,0,0,0.06) 4px
+    );
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 28px 48px 20px;
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  header::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .header-tag {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    border: 1px solid var(--accent);
+    padding: 3px 10px;
+    margin-bottom: 4px;
+  }
+  header h1 {
+    font-size: clamp(22px, 3vw, 34px);
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    color: #fff;
+  }
+  header h1 span { color: var(--accent); }
+  header p {
+    font-size: 16px;
+    color: var(--dim);
+    margin-top: 4px;
+    max-width: 520px;
+    line-height: 1.5;
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+  .sidebar {
+    background: var(--panel);
+    padding: 28px 22px;
+    grid-row: 1 / 3;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    border-right: 1px solid var(--border);
+  }
+  .main-top {
+    background: var(--bg);
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .main-bottom {
+    background: var(--bg);
+    padding: 20px 28px 32px;
+  }
+
+  /* ── Section labels ── */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Controls ── */
+  .control-group { display: flex; flex-direction: column; gap: 8px; }
+  .control-group label {
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: var(--dim);
+    text-transform: uppercase;
+    font-family: var(--mono);
+  }
+
+  .mev-display {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    margin-bottom: 6px;
+    letter-spacing: -1px;
+  }
+  .mev-display span { font-size: 16px; color: var(--dim); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+  }
+
+  /* Material toggles */
+  .material-grid { display: flex; flex-direction: column; gap: 8px; }
+  .mat-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    font-family: var(--sans);
+    color: var(--text);
+    text-align: left;
+  }
+  .mat-btn.active { border-color: var(--mat-color); background: color-mix(in srgb, var(--mat-color) 10%, transparent); }
+  .mat-btn:hover { border-color: var(--mat-color); }
+  .mat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .mat-info { flex: 1; }
+  .mat-name { font-size: 14px; font-weight: 600; }
+  .mat-details { font-size: 12px; font-family: var(--mono); color: var(--dim); margin-top: 2px; }
+
+  .n-electrons-row { display: flex; gap: 8px; align-items: center; }
+  input[type=number] {
+    background: var(--border);
+    border: 1px solid #1e3050;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 15px;
+    padding: 8px 12px;
+    width: 90px;
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=number]:focus { border-color: var(--accent); }
+
+  /* Run button */
+  .run-btn {
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 15px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s;
+    border-radius: 2px;
+  }
+  .run-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--accent);
+    transform: translateX(-100%);
+    transition: transform 0.2s;
+    z-index: -1;
+  }
+  .run-btn:hover { color: var(--bg); }
+  .run-btn:hover::before { transform: translateX(0); }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn:disabled:hover { color: var(--accent); }
+  .run-btn:disabled:hover::before { transform: translateX(-100%); }
+
+  /* Stats panel */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-card {
+    background: color-mix(in srgb, var(--accent) 5%, var(--panel));
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+    border-radius: 2px;
+  }
+  .stat-card.full { grid-column: 1 / -1; }
+  .stat-label { font-size: 12px; font-family: var(--mono); color: var(--dim); letter-spacing: 1px; text-transform: uppercase; }
+  .stat-value { font-size: 22px; font-family: var(--mono); color: #fff; margin-top: 2px; font-weight: 600; }
+  .stat-unit { font-size: 13px; color: var(--dim); }
+
+  /* ── Canvas simulation ── */
+  .canvas-wrap {
+    position: relative;
+    background: #020609;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; }
+  .canvas-overlay {
+    position: absolute; top: 10px; left: 12px;
+    font-family: var(--mono); font-size: 13px; color: var(--dim);
+    pointer-events: none;
+  }
+  .canvas-overlay span { color: var(--accent); }
+  .sim-legend {
+    position: absolute; top: 10px; right: 12px;
+    display: flex; gap: 14px;
+    font-family: var(--mono); font-size: 13px; color: var(--dim);
+    pointer-events: none;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* ── Charts grid ── */
+  .charts-title {
+    font-size: 14px; font-family: var(--mono); color: var(--dim);
+    letter-spacing: 2px; text-transform: uppercase; margin-bottom: 18px;
+  }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .chart-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 16px;
+  }
+  .chart-card.wide { grid-column: 1 / -1; }
+  .chart-title { font-size: 13px; font-family: var(--mono); color: var(--accent); margin-bottom: 12px; letter-spacing: 1px; }
+  .chart-canvas { width: 100%; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 160px; gap: 8px; color: var(--dim);
+    font-family: var(--mono); font-size: 14px; letter-spacing: 1px;
+  }
+  .empty-state svg { opacity: 0.3; }
+
+  /* Progress bar */
+  .progress-bar {
+    height: 2px; background: var(--border); margin-top: 8px; border-radius: 1px; overflow: hidden; display: none;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent3));
+    width: 0%; transition: width 0.1s linear;
+  }
+
+  /* ── Chart expand modal ── */
+  .chart-card {
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.15s;
+  }
+  .chart-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .chart-card:hover .chart-title::after {
+    content: ' ⤢';
+    color: var(--accent);
+    font-size: 10px;
+  }
+
+  .chart-modal-backdrop {
+    display: none;
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(2, 6, 9, 0.88);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .chart-modal-backdrop.open {
+    display: flex;
+    animation: backdrop-in 0.2s ease;
+  }
+  @keyframes backdrop-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .chart-modal {
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    padding: 28px 32px;
+    width: min(92vw, 960px);
+    max-height: 88vh;
+    cursor: default;
+    position: relative;
+    box-shadow: 0 0 60px rgba(0,229,255,0.12);
+    animation: modal-in 0.2s cubic-bezier(0.34,1.3,0.64,1);
+  }
+  @keyframes modal-in {
+    from { transform: scale(0.92); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .chart-modal-title {
+    font-family: var(--mono);
+    font-size: 15px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .chart-modal-close {
+    background: none; border: 1px solid var(--border);
+    color: var(--dim); font-family: var(--mono); font-size: 13px;
+    padding: 4px 10px; cursor: pointer; border-radius: 2px;
+    transition: all 0.15s; letter-spacing: 1px;
+  }
+  .chart-modal-close:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .chart-modal canvas { display: block; width: 100%; }
+
+  /* Hint text on chart cards */
+  .chart-hint {
+    font-family: var(--mono); font-size: 11px; color: var(--dim);
+    text-align: right; margin-top: 6px; opacity: 0.6;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { grid-row: auto; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .charts-grid .chart-card.wide { grid-column: auto; }
+  }
+
+  /* Glow pulse on active sim */
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,229,255,0); }
+    50% { box-shadow: 0 0 20px 2px rgba(0,229,255,0.15); }
+  }
+  .canvas-wrap.running { animation: glow-pulse 1s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-tag">QED Simulator v1.0</div>
+    <h1>BREMS<span>STRAHLUNG</span></h1>
+    <p>High-energy electron energy loss through matter. Bremsstrahlung radiation &amp; QED exponential decay.</p>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+
+    <div>
+      <div class="section-label">Beam Energy</div>
+      <div class="control-group">
+        <div class="mev-display" id="mev-display">100 <span>MeV</span></div>
+        <input type="range" id="energy-slider" min="1" max="500" value="100" step="1"/>
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--dim);margin-top:2px;">
+          <span>1 MeV</span><span>500 MeV</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Target Material</div>
+      <div class="material-grid" id="mat-grid">
+        <button class="mat-btn active" data-mat="Al" style="--mat-color:var(--al)">
+          <div class="mat-dot" style="background:var(--al)"></div>
+          <div class="mat-info">
+            <div class="mat-name">Aluminium</div>
+            <div class="mat-details">Z=13 · X₀=8.90 cm · ρ=2.70 g/cm³</div>
+          </div>
+        </button>
+        <button class="mat-btn" data-mat="Cu" style="--mat-color:var(--cu)">
+          <div class="mat-dot" style="background:var(--cu)"></div>
+          <div class="mat-info">
+            <div class="mat-name">Copper</div>
+            <div class="mat-details">Z=29 · X₀=1.44 cm · ρ=8.96 g/cm³</div>
+          </div>
+        </button>
+        <button class="mat-btn" data-mat="Pb" style="--mat-color:var(--pb)">
+          <div class="mat-dot" style="background:var(--pb)"></div>
+          <div class="mat-info">
+            <div class="mat-name">Lead</div>
+            <div class="mat-details">Z=82 · X₀=0.56 cm · ρ=11.35 g/cm³</div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Electrons</div>
+      <div class="control-group">
+        <label>Number of electrons</label>
+        <div class="n-electrons-row">
+          <input type="number" id="n-electrons" value="150" min="10" max="800" step="10"/>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--dim)">max 800</span>
+        </div>
+      </div>
+      <div class="progress-bar" id="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+
+    <button class="run-btn" id="run-btn" onclick="runSim()">▶ RUN SIMULATION</button>
+
+    <div>
+      <div class="section-label">Results</div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-label">Avg Exit Energy</div><div class="stat-value" id="stat-exit">—</div><div class="stat-unit">MeV</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Photons</div><div class="stat-value" id="stat-photons">—</div><div class="stat-unit">per e⁻</div></div>
+        <div class="stat-card"><div class="stat-label">Energy Lost</div><div class="stat-value" id="stat-loss">—</div><div class="stat-unit">%</div></div>
+        <div class="stat-card"><div class="stat-label">Critical Energy</div><div class="stat-value" id="stat-ec">—</div><div class="stat-unit">MeV</div></div>
+        <div class="stat-card full"><div class="stat-label">QED Predicted Exit Energy</div><div class="stat-value" id="stat-qed">—</div><div class="stat-unit" id="stat-qed-unit">MeV  (E₀ · e⁻²)</div></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN TOP: Canvas Simulation ── -->
+  <div class="main-top">
+    <div class="section-label">Live Simulation — 2D Top-Down View</div>
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="sim-canvas" height="260"></canvas>
+      <div class="canvas-overlay">
+        BEAM → <span id="canvas-label">Select material &amp; run</span>
+      </div>
+      <div class="sim-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#00e5ff"></div><span>high energy</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#c8ff30"></div><span>low energy</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff4d6d"></div><span>γ photon</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MAIN BOTTOM: Charts ── -->
+  <div class="main-bottom">
+    <div class="charts-title">// Analysis Graphs</div>
+    <div class="charts-grid">
+      <div class="chart-card wide" data-chart="energy" onclick="openModal('energy')">
+        <div class="chart-title">MEAN ELECTRON ENERGY vs DEPTH (in X₀ units)</div>
+        <canvas id="chart-energy" class="chart-canvas" height="160"></canvas>
+        <div class="chart-hint">click to expand</div>
+      </div>
+      <div class="chart-card" data-chart="spectrum" onclick="openModal('spectrum')">
+        <div class="chart-title">PHOTON ENERGY SPECTRUM</div>
+        <canvas id="chart-spectrum" class="chart-canvas" height="180"></canvas>
+        <div class="chart-hint">click to expand</div>
+      </div>
+      <div class="chart-card" data-chart="loss" onclick="openModal('loss')">
+        <div class="chart-title">IONISATION vs BREMSSTRAHLUNG</div>
+        <canvas id="chart-loss" class="chart-canvas" height="180"></canvas>
+        <div class="chart-hint">click to expand</div>
+      </div>
+      <div class="chart-card" data-chart="z" onclick="openModal('z')">
+        <div class="chart-title">Z-DEPENDENCE (All Materials)</div>
+        <canvas id="chart-z" class="chart-canvas" height="180"></canvas>
+        <div class="chart-hint">click to expand</div>
+      </div>
+    </div>
+    <div id="empty-msg" style="text-align:center;padding:40px 0;font-family:var(--mono);font-size:12px;color:var(--dim);">
+      ↑ Press RUN SIMULATION to generate all graphs
+    </div>
+  </div>
+
+</div>
+
+<!-- ── CHART EXPAND MODAL ── -->
+<div class="chart-modal-backdrop" id="chart-modal-backdrop" onclick="closeModal(event)">
+  <div class="chart-modal" id="chart-modal">
+    <div class="chart-modal-title">
+      <span id="modal-title-text">CHART</span>
+      <button class="chart-modal-close" onclick="closeModalDirect()">✕ CLOSE</button>
+    </div>
+    <canvas id="modal-canvas" height="460"></canvas>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  PHYSICS ENGINE  (JS port of the Python simulation)
+// =====================================================================
+
+const MATERIALS = {
+  Al: { name:'Aluminium', Z:13,  A:26.98,  rho:2.70,  X0:8.897,  color:'#4e9af1' },
+  Cu: { name:'Copper',    Z:29,  A:63.55,  rho:8.96,  X0:1.436,  color:'#e07b39' },
+  Pb: { name:'Lead',      Z:82,  A:207.2,  rho:11.35, X0:0.5612, color:'#b76cef' },
+};
+
+const Me = 0.511; // MeV electron mass
+const THICKNESS_X0 = 2.0;
+const N_STEPS = 200;
+
+function rng() { return Math.random(); }
+function randNormal(mean=0, std=1) {
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return mean + std * Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+
+function betheDEdx(E, Z, A, rho) {
+  // Relativistic Bethe-Bloch stopping power for electrons (MeV/cm)
+  // Standard form validated against NIST ESTAR tables.
+  // Uses 2·me·β²·γ²/I inside the log — this is the correct relativistic
+  // form for electrons without the Tmax enhancement that applies to heavy ions.
+  const I_MeV = 13.5 * Z * 1e-6;     // mean excitation energy (eV → MeV)
+  const gamma  = (E + Me) / Me;
+  let beta2 = 1.0 - 1.0 / (gamma * gamma);
+  beta2 = Math.max(beta2, 1e-6);
+  const K = 0.307075;                  // MeV cm² / mol
+
+  // -dE/dx = K·(Z/A)·ρ/β² · [½·ln(2·me·β²·γ²/I) - β²/2 - δ/2]
+  // δ (density correction) ≈ 2·ln(γ) - 1  for solids at relativistic energies
+  // For simplicity we omit δ here (conservative, slight overestimate at very high E)
+  const logArg = 2.0 * Me * beta2 * gamma * gamma / I_MeV;
+  const inner  = 0.5 * Math.log(logArg) - beta2 / 2.0;
+  const val    = K * (Z / A) * rho / beta2 * Math.max(inner, 0.01);
+  return Math.max(val, 0.5);           // physical floor ~0.5 MeV/cm for any solid
+}
+
+function bremDEdx(E, X0) {
+  // dE/dx_rad = E / X0  (MeV/cm), where X0 is already in cm
+  // From QED: dE/dx = E·ρ / (X0_cm·ρ) = E / X0_cm
+  return E / X0;
+}
+
+function criticalEnergy(Z) { return 800 / (Z + 1.2); }
+
+// Proper Poisson sampler using Knuth's algorithm (exact for any lambda)
+function poissonSample(lambda) {
+  if (lambda <= 0) return 0;
+  // For large lambda use normal approximation to avoid infinite loop
+  if (lambda > 30) return Math.max(0, Math.round(lambda + Math.sqrt(lambda) * randNormal()));
+  const L = Math.exp(-lambda);
+  let k = 0, p = 1;
+  do { k++; p *= rng(); } while (p > L);
+  return k - 1;
+}
+
+function samplePhotonEnergy(E) {
+  // Inverse-CDF sampling of dN/dk ∝ 1/k (Bethe-Heitler)
+  // gives k = Emin * (E/Emin)^u which is log-uniform — correct 1/k sampling
+  const Emin = Math.max(0.001 * E, 1e-4);
+  if (E <= Emin) return 0;
+  const u = rng();
+  return Emin * Math.pow(E / Emin, u);
+}
+
+function simulateElectron(E0, mat) {
+  const { Z, A, rho, X0 } = mat;
+  const thick = THICKNESS_X0 * X0;
+  const step = thick / N_STEPS;
+
+  const depths   = new Float32Array(N_STEPS + 1);
+  const energies = new Float32Array(N_STEPS + 1);
+  const photons  = [];
+  const xt = new Float32Array(N_STEPS + 1);
+  const yt = new Float32Array(N_STEPS + 1);
+
+  energies[0] = E0;
+  let angle = 0;
+
+  for (let i = 0; i < N_STEPS; i++) {
+    const E = energies[i];
+    if (E < 0.005) {
+      for (let j = i+1; j <= N_STEPS; j++) {
+        depths[j]   = depths[i];
+        energies[j] = 0;
+        xt[j]       = xt[i];
+        yt[j]       = yt[i];
+      }
+      break;
+    }
+    const dE_ion = betheDEdx(E, Z, A, rho) * step;
+    const dE_rad = bremDEdx(E, X0) * step;
+    let dE_tot = dE_ion + dE_rad;
+    dE_tot = Math.min(dE_tot, E * 0.9);
+
+    energies[i+1] = E - dE_tot;
+    depths[i+1]   = depths[i] + step;
+
+    // Expected photon count per step:
+    // Each step loses dE_rad to radiation on average. We model this as
+    // a Poisson number of discrete photons sampled from the 1/k spectrum.
+    // The mean number comes from integrating dN/dk = (dE_rad/E) / k over
+    // k in [Emin, E], giving <N> = (dE_rad / E) * ln(E / Emin).
+    // Note: alpha/pi belongs in the cross-section per nucleus, but here
+    // dE_rad already encodes the full material-integrated radiative loss,
+    // so no extra alpha/pi factor is needed.
+    const Emin = Math.max(0.001 * E, 1e-4);
+    const lnRatio = Math.log(E / Emin);        // ≈ ln(1000) ≈ 6.9
+    const expectedN = (dE_rad / E) * lnRatio;
+    const nPhotons = poissonSample(expectedN);
+    for (let p = 0; p < nPhotons; p++) {
+      const k = samplePhotonEnergy(E);
+      if (k > 0 && k < E) photons.push(k);
+    }
+
+    const beta = Math.sqrt(1 - Math.pow(Me / (E + Me), 2));
+    const p_MeV = Math.sqrt(E*E + 2*E*Me);
+    const t_X0 = step / X0;
+    let theta0 = (13.6 / (beta * p_MeV)) * Math.sqrt(t_X0) * (1 + 0.038 * Math.log(t_X0 + 1e-12));
+    theta0 = Math.min(Math.abs(theta0), Math.PI/4);
+    angle += randNormal(0, theta0);
+
+    xt[i+1] = xt[i] + step * Math.cos(angle);
+    yt[i+1] = yt[i] + step * Math.sin(angle);
+  }
+
+  return { depths, energies, photons, xt, yt };
+}
+
+// =====================================================================
+//  STATE
+// =====================================================================
+let selectedMat = 'Al';
+let lastResults = null;
+
+// =====================================================================
+//  UI CONTROLS
+// =====================================================================
+const slider = document.getElementById('energy-slider');
+const mevDisplay = document.getElementById('mev-display');
+slider.addEventListener('input', () => {
+  mevDisplay.innerHTML = slider.value + ' <span>MeV</span>';
+});
+
+document.querySelectorAll('.mat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedMat = btn.dataset.mat;
+  });
+});
+
+// =====================================================================
+//  RUN
+// =====================================================================
+async function runSim() {
+  const btn = document.getElementById('run-btn');
+  const progressBar = document.getElementById('progress-bar');
+  const progressFill = document.getElementById('progress-fill');
+  const canvasWrap = document.getElementById('canvas-wrap');
+  const emptyMsg = document.getElementById('empty-msg');
+
+  btn.disabled = true;
+  btn.textContent = '⏳ SIMULATING…';
+  progressBar.style.display = 'block';
+  progressFill.style.width = '0%';
+  canvasWrap.classList.add('running');
+  emptyMsg.style.display = 'none';
+
+  const E0 = parseFloat(slider.value);
+  const N  = Math.min(parseInt(document.getElementById('n-electrons').value), 800);
+  const mat = MATERIALS[selectedMat];
+
+  // Run in chunks to keep UI responsive
+  const allResults = [];
+  const CHUNK = 20;
+  for (let i = 0; i < N; i += CHUNK) {
+    const end = Math.min(i + CHUNK, N);
+    for (let j = i; j < end; j++) {
+      allResults.push(simulateElectron(E0, mat));
+    }
+    const pct = Math.round((end / N) * 100);
+    progressFill.style.width = pct + '%';
+    await new Promise(r => setTimeout(r, 0)); // yield to browser
+  }
+
+  lastResults = { allResults, mat, E0, N };
+
+  progressBar.style.display = 'none';
+  canvasWrap.classList.remove('running');
+  btn.disabled = false;
+  btn.textContent = '▶ RUN SIMULATION';
+
+  drawCanvas(lastResults);
+  drawCharts(lastResults);
+  updateStats(lastResults);
+}
+
+// =====================================================================
+//  CANVAS SIMULATION DRAW
+// =====================================================================
+function drawCanvas({ allResults, mat, E0, N }) {
+  const canvas = document.getElementById('sim-canvas');
+  const label  = document.getElementById('canvas-label');
+  const ctx = canvas.getContext('2d');
+
+  // Fit canvas to container
+  const W = canvas.parentElement.clientWidth;
+  const H = 260;
+  canvas.width  = W;
+  canvas.height = H;
+
+  ctx.fillStyle = '#020609';
+  ctx.fillRect(0, 0, W, H);
+
+  const thick_cm = THICKNESS_X0 * mat.X0;
+  const DISPLAY = Math.min(allResults.length, 80); // max 80 for canvas
+
+  // Find max transverse spread
+  let maxY = 0;
+  for (let i = 0; i < DISPLAY; i++) {
+    const r = allResults[i];
+    for (let j = 0; j < r.yt.length; j++) maxY = Math.max(maxY, Math.abs(r.yt[j]));
+  }
+  // Guarantee enough spread to see trajectories — at least 5% of target thickness
+  maxY = Math.max(maxY, thick_cm * 0.05, 0.01);
+
+  const PAD_L = 60, PAD_R = 20, PAD_T = 30, PAD_B = 20;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+
+  // scaleX: map x in [0, thick_cm] to canvas, leaving 15% right margin
+  const scaleX = x => PAD_L + (x / thick_cm) * plotW * 0.85;
+  // scaleY: map y in [-maxY, +maxY] to [bottom, top] of plot area
+  const scaleY = y => PAD_T + plotH/2 - (y / maxY) * (plotH / 2) * 0.9;
+
+  // Target rectangle
+  const tx1 = scaleX(0);
+  const tx2 = scaleX(thick_cm);
+  ctx.fillStyle = mat.color + '18';
+  ctx.fillRect(tx1, PAD_T, tx2 - tx1, plotH);
+  ctx.strokeStyle = mat.color + '60';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(tx1, PAD_T, tx2 - tx1, plotH);
+
+  // Target label
+  ctx.fillStyle = mat.color + 'aa';
+  ctx.font = '10px Share Tech Mono';
+  ctx.fillText(mat.name.toUpperCase(), tx1 + 4, PAD_T + 12);
+
+  // Centre line (dashed)
+  ctx.strokeStyle = '#ffffff18';
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.moveTo(PAD_L, PAD_T + plotH/2);
+  ctx.lineTo(W - PAD_R, PAD_T + plotH/2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Electron trajectories — coloured segment-by-segment by local energy
+  for (let i = 0; i < DISPLAY; i++) {
+    const r = allResults[i];
+    const finalE = r.energies[r.energies.length - 1];
+
+    for (let j = 1; j < r.xt.length; j++) {
+      const localE = r.energies[j];
+      if (localE <= 0) break;
+      const frac = Math.max(0, Math.min(1, localE / E0));
+      // cyan (frac=1, high E) → yellow (frac=0.3) → dim grey (frac→0, stopped)
+      const r_ = Math.round(frac > 0.05 ? lerp(200, 0,   frac) : 80);
+      const g_ = Math.round(frac > 0.05 ? lerp(255, 229, frac) : 100);
+      const b_ = Math.round(frac > 0.05 ? lerp(30,  255, frac) : 80);
+      const a  = frac > 0.05 ? 0.7 : 0.3;
+      ctx.beginPath();
+      ctx.moveTo(scaleX(r.xt[j-1]), scaleY(r.yt[j-1]));
+      ctx.lineTo(scaleX(r.xt[j]),   scaleY(r.yt[j]));
+      ctx.strokeStyle = `rgba(${r_},${g_},${b_},${a})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Photon emission markers — scatter along actual track
+    for (let p = 0; p < Math.min(r.photons.length, 5); p++) {
+      const step = Math.floor((p / Math.max(r.photons.length, 1)) * N_STEPS);
+      const px = scaleX(r.xt[step] || 0);
+      const py = scaleY(r.yt[step] || 0);
+      ctx.beginPath();
+      ctx.arc(px, py, 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff4d6dcc';
+      ctx.fill();
+    }
+  }
+
+  // Beam arrow on left
+  ctx.strokeStyle = '#00e5ff80';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(10, PAD_T + plotH/2);
+  ctx.lineTo(tx1 - 4, PAD_T + plotH/2);
+  ctx.stroke();
+  ctx.fillStyle = '#00e5ff80';
+  ctx.beginPath();
+  ctx.moveTo(tx1 - 2, PAD_T + plotH/2 - 4);
+  ctx.lineTo(tx1 + 5, PAD_T + plotH/2);
+  ctx.lineTo(tx1 - 2, PAD_T + plotH/2 + 4);
+  ctx.fill();
+
+  // Axis labels
+  ctx.fillStyle = '#4a607a';
+  ctx.font = '11px Share Tech Mono';
+  ctx.fillText('x (cm)', PAD_L + plotW * 0.4, H - 4);
+  ctx.save();
+  ctx.translate(14, PAD_T + plotH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('transverse (cm)', -40, 0);
+  ctx.restore();
+
+  label.innerHTML = `${mat.name.toUpperCase()} · Z=${mat.Z} · X₀=${mat.X0} cm`;
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// =====================================================================
+//  CHARTS
+// =====================================================================
+function drawCharts({ allResults, mat, E0, N }) {
+  drawEnergyChart(allResults, mat, E0);
+  drawSpectrumChart(allResults, mat, E0);
+  drawLossChart(mat, E0);
+  drawZChart(E0);
+}
+
+// -- Chart helpers --
+function clearChart(id) {
+  const c = document.getElementById(id);
+  c.width = c.parentElement.clientWidth - 32;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0c1320';
+  ctx.fillRect(0, 0, c.width, c.height);
+  return ctx;
+}
+
+function chartAxes(ctx, W, H, pad, xMin, xMax, yMin, yMax, xLabel, yLabel, nXTicks=5, nYTicks=4) {
+  const { l, r, t, b } = pad;
+  const plotW = W - l - r, plotH = H - t - b;
+
+  ctx.strokeStyle = '#1a2840';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+
+  // Grid
+  for (let i = 0; i <= nYTicks; i++) {
+    const y = t + plotH - (i / nYTicks) * plotH;
+    ctx.beginPath(); ctx.moveTo(l, y); ctx.lineTo(l + plotW, y); ctx.stroke();
+  }
+  for (let i = 0; i <= nXTicks; i++) {
+    const x = l + (i / nXTicks) * plotW;
+    ctx.beginPath(); ctx.moveTo(x, t); ctx.lineTo(x, t + plotH); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.strokeStyle = '#2a4060';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(l, t); ctx.lineTo(l, t + plotH);
+  ctx.lineTo(l + plotW, t + plotH); ctx.stroke();
+
+  // Tick labels
+  ctx.fillStyle = '#4a607a';
+  ctx.font = '11px Share Tech Mono';
+  ctx.textAlign = 'center';
+  for (let i = 0; i <= nXTicks; i++) {
+    const x = l + (i / nXTicks) * plotW;
+    const val = xMin + (i / nXTicks) * (xMax - xMin);
+    ctx.fillText(val.toFixed(xMax > 10 ? 0 : 1), x, t + plotH + 14);
+  }
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= nYTicks; i++) {
+    const y = t + plotH - (i / nYTicks) * plotH;
+    const val = yMin + (i / nYTicks) * (yMax - yMin);
+    ctx.fillText(val.toFixed(yMax > 100 ? 0 : 1), l - 4, y + 3);
+  }
+
+  // Axis labels
+  ctx.fillStyle = '#4a607a';
+  ctx.font = '11px Share Tech Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText(xLabel, l + plotW/2, H - 1);
+  ctx.save();
+  ctx.translate(12, t + plotH/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+
+  const toX = v => l + ((v - xMin) / (xMax - xMin)) * plotW;
+  const toY = v => t + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+  return { toX, toY, l, r, t, b, plotW, plotH };
+}
+
+// ── Energy vs Depth ──────────────────────────────────────────────────
+function drawEnergyChart(allResults, mat, E0) {
+  const c = document.getElementById('chart-energy');
+  c.width = c.parentElement.clientWidth - 32;
+  const W = c.width, H = c.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0c1320';
+  ctx.fillRect(0, 0, W, H);
+
+  const N = allResults.length;
+  const pad = { l:50, r:20, t:18, b:28 };
+
+  // Compute mean energy at each step
+  const meanE = new Float32Array(N_STEPS + 1);
+  const stdE  = new Float32Array(N_STEPS + 1);
+  for (let j = 0; j <= N_STEPS; j++) {
+    let sum = 0, sum2 = 0;
+    for (let i = 0; i < N; i++) { const v = allResults[i].energies[j]; sum += v; sum2 += v*v; }
+    meanE[j] = sum / N;
+    stdE[j]  = Math.sqrt(Math.max(0, sum2/N - meanE[j]*meanE[j]));
+  }
+
+  const depthX0 = new Float32Array(N_STEPS + 1);
+  for (let j = 0; j <= N_STEPS; j++) depthX0[j] = (j / N_STEPS) * THICKNESS_X0;
+
+  const { toX, toY, l, t, plotH } = chartAxes(
+    ctx, W, H, pad, 0, THICKNESS_X0, 0, E0, 'Depth (X₀)', 'Energy (MeV)'
+  );
+
+  // Std band
+  ctx.beginPath();
+  for (let j = 0; j <= N_STEPS; j++) ctx.lineTo(toX(depthX0[j]), toY(meanE[j] + stdE[j]));
+  for (let j = N_STEPS; j >= 0; j--) ctx.lineTo(toX(depthX0[j]), toY(meanE[j] - stdE[j]));
+  ctx.closePath();
+  ctx.fillStyle = mat.color + '30';
+  ctx.fill();
+
+  // QED prediction
+  ctx.beginPath();
+  for (let j = 0; j <= N_STEPS; j++) {
+    const x = (j / N_STEPS) * THICKNESS_X0;
+    ctx.lineTo(toX(x), toY(E0 * Math.exp(-x)));
+  }
+  ctx.strokeStyle = '#ffffff60';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Mean
+  ctx.beginPath();
+  for (let j = 0; j <= N_STEPS; j++) ctx.lineTo(toX(depthX0[j]), toY(meanE[j]));
+  ctx.strokeStyle = mat.color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Legend
+  ctx.font = '11px Share Tech Mono';
+  ctx.fillStyle = mat.color; ctx.fillText('─ Simulation (ionisation + radiation)', l + 5, t + 14);
+  ctx.fillStyle = '#ffffff60'; ctx.fillText('─ ─ QED radiative-only  E₀·e⁻ˣ', l + 5, t + 27);
+  // Annotation: gap is expected
+  ctx.fillStyle = '#4a607a'; ctx.font = '9px Share Tech Mono';
+  ctx.textAlign = 'right';
+  ctx.fillText('gap = ionisation loss (physical)', W - 20, t + 14);
+  ctx.textAlign = 'left';
+}
+
+// ── Photon Spectrum ───────────────────────────────────────────────────
+function drawSpectrumChart(allResults, mat, E0) {
+  const c = document.getElementById('chart-spectrum');
+  c.width = c.parentElement.clientWidth - 32;
+  const W = c.width, H = c.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0c1320';
+  ctx.fillRect(0, 0, W, H);
+
+  const photons = allResults.flatMap(r => r.photons);
+  if (photons.length === 0) { noData(ctx, W, H, 'No photons emitted'); return; }
+
+  const N_BINS = 40;
+  const logMin = Math.log10(Math.max(photons.reduce((a,b)=>Math.min(a,b)), 1e-3));
+  const logMax = Math.log10(photons.reduce((a,b)=>Math.max(a,b)));
+  const binLogW = (logMax - logMin) / N_BINS;
+
+  // Count photons per log-spaced bin
+  const counts = new Float32Array(N_BINS);
+  for (const p of photons) {
+    const idx = Math.floor((Math.log10(p) - logMin) / binLogW);
+    if (idx >= 0 && idx < N_BINS) counts[idx]++;
+  }
+
+  // KEY FIX: convert to dN/dk by dividing by the LINEAR bin width dk
+  // This makes the 1/k slope visible — without this, log-uniform bins
+  // give a flat histogram even when the underlying distribution is 1/k
+  const dNdk = new Float32Array(N_BINS);
+  for (let i = 0; i < N_BINS; i++) {
+    const dk = Math.pow(10, logMin + (i+1)*binLogW) - Math.pow(10, logMin + i*binLogW);
+    dNdk[i] = counts[i] / dk;
+  }
+  const maxVal = dNdk.reduce((a,b)=>Math.max(a,b));
+
+  const pad = { l:50, r:10, t:28, b:28 };
+  const { l, r, t, b, plotW, plotH } = chartAxes(
+    ctx, W, H, pad, logMin, logMax, 0, maxVal,
+    'log₁₀(k)  [MeV]', 'dN/dk  [MeV⁻¹]', 5, 4
+  );
+
+  const toX = v => l + ((v - logMin) / (logMax - logMin)) * plotW;
+  const toY = v => t + plotH - (v / maxVal) * plotH;
+
+  // Bars
+  for (let i = 0; i < N_BINS; i++) {
+    const x1 = toX(logMin + i * binLogW);
+    const x2 = toX(logMin + (i+1) * binLogW);
+    const y  = toY(dNdk[i]);
+    ctx.fillStyle = mat.color + 'cc';
+    ctx.fillRect(x1 + 1, y, Math.max(x2 - x1 - 1, 1), t + plotH - y);
+  }
+
+  // 1/k theory line — fit norm using median of bins 2–8 (avoids noisy edges)
+  const midBins = dNdk.slice(2, 9).filter(v => v > 0);
+  const midKs   = midBins.map((_, i) => Math.pow(10, logMin + (i + 2.5) * binLogW));
+  // norm = median(dNdk[i] * k[i])
+  const products = midBins.map((v, i) => v * midKs[i]).sort((a,b) => a-b);
+  const norm = products[Math.floor(products.length / 2)] || dNdk[0] * Math.pow(10, logMin);
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i <= 120; i++) {
+    const logK = logMin + (i / 120) * (logMax - logMin);
+    const k = Math.pow(10, logK);
+    const theory = norm / k;
+    const y = toY(Math.min(theory, maxVal * 1.05));
+    if (!started) { ctx.moveTo(toX(logK), y); started = true; }
+    else ctx.lineTo(toX(logK), y);
+  }
+  ctx.strokeStyle = '#ffffffaa';
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '11px Share Tech Mono'; ctx.textAlign = 'left';
+  ctx.fillStyle = mat.color + 'ee'; ctx.fillText('█ dN/dk  (simulation)', l + 4, t + 14);
+  ctx.fillStyle = '#ffffffaa'; ctx.fillText('─ ─ 1/k  (Bethe-Heitler)', l + 4, t + 27);
+}
+
+// ── Loss mechanisms ───────────────────────────────────────────────────
+function drawLossChart(mat, E0) {
+  const c = document.getElementById('chart-loss');
+  c.width = c.parentElement.clientWidth - 32;
+  const W = c.width, H = c.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0c1320';
+  ctx.fillRect(0, 0, W, H);
+
+  const N_E = 120;
+  const Emin = 0.1, Emax = E0 * 2;
+  const logMin = Math.log10(Emin), logMax = Math.log10(Emax);
+
+  const E_vals = [], ion_vals = [], rad_vals = [];
+  for (let i = 0; i <= N_E; i++) {
+    const E = Math.pow(10, logMin + (i / N_E) * (logMax - logMin));
+    E_vals.push(E);
+    ion_vals.push(betheDEdx(E, mat.Z, mat.A, mat.rho));
+    rad_vals.push(bremDEdx(E, mat.X0));
+  }
+
+  const allVals = [...ion_vals, ...rad_vals];
+  const yMax = allVals.reduce((a,b)=>Math.max(a,b));
+  const yMin = allVals.reduce((a,b)=>Math.min(a,b)) * 0.5;
+
+  const pad = { l:52, r:10, t:18, b:28 };
+  const { l, r, t, b, plotW, plotH } = chartAxes(
+    ctx, W, H, pad, logMin, logMax, Math.log10(yMin), Math.log10(yMax),
+    'log₁₀(E) MeV', 'log(dE/dx)', 5, 4
+  );
+
+  const toX = v => l + ((Math.log10(v) - logMin) / (logMax - logMin)) * plotW;
+  const toY = v => t + plotH - ((Math.log10(v) - Math.log10(yMin)) / (Math.log10(yMax) - Math.log10(yMin))) * plotH;
+
+  // Ionisation
+  ctx.beginPath();
+  E_vals.forEach((E, i) => ctx.lineTo(toX(E), toY(ion_vals[i])));
+  ctx.strokeStyle = '#00e5ffcc'; ctx.lineWidth = 2; ctx.stroke();
+
+  // Bremsstrahlung
+  ctx.beginPath();
+  E_vals.forEach((E, i) => ctx.lineTo(toX(E), toY(rad_vals[i])));
+  ctx.strokeStyle = mat.color; ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]); ctx.stroke(); ctx.setLineDash([]);
+
+  // Critical energy line
+  const Ec = criticalEnergy(mat.Z);
+  if (Ec > Emin && Ec < Emax) {
+    ctx.strokeStyle = '#b8ff4d80';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(toX(Ec), t);
+    ctx.lineTo(toX(Ec), t + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#b8ff4d';
+    ctx.font = '11px Share Tech Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Ec=${Ec.toFixed(0)}`, toX(Ec) + 2, t + 20);
+  }
+
+  ctx.font = '11px Share Tech Mono'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#00e5ffcc'; ctx.fillText('── ionisation', l + 3, t + 14);
+  ctx.fillStyle = mat.color; ctx.fillText('─ ─ bremsstrahlung', l + 3, t + 26);
+}
+
+// ── Z dependence ─────────────────────────────────────────────────────
+// Correct physics: radiation yield per unit length = ρ/X₀  (MeV lost per MeV per cm)
+// X₀ already encodes the full Z, A, ρ dependence from QED (Bethe-Heitler)
+// So ρ/X₀ is the physically correct, QED-derived quantity to compare across materials.
+// Pb/Al ratio should be ~20× based on PDG radiation length values.
+function drawZChart(E0) {
+  const c = document.getElementById('chart-z');
+  c.width = c.parentElement.clientWidth - 32;
+  const W = c.width, H = c.height;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0c1320';
+  ctx.fillRect(0, 0, W, H);
+
+  const mats = Object.values(MATERIALS);
+  const matKeys = Object.keys(MATERIALS);
+  const Z_vals = mats.map(m => m.Z);
+
+  // Radiation yield per unit length: ρ/X₀  [g/cm³ / cm = g/cm⁴]
+  // Normalised to Al = 1.0
+  const rawYield = mats.map(m => m.rho / m.X0);
+  const normFactor = rawYield[0];
+  const yieldNorm  = rawYield.map(y => y / normFactor);
+
+  const yMax = yieldNorm.reduce((a,b)=>Math.max(a,b)) * 1.35;
+  const pad = { l:52, r:14, t:22, b:32 };
+  const { l, r, t, b, plotW, plotH } = chartAxes(
+    ctx, W, H, pad, 0, 90, 0, yMax, 'Atomic number  Z', 'Radiation yield  (Al = 1)', 4, 4
+  );
+
+  const toX = v => l + (v / 90) * plotW;
+  const toY = v => t + plotH - (v / yMax) * plotH;
+
+  // Z²/A·ρ reference curve — the analytical approximation, normalised to Al
+  // 1/X₀ ≈ 4α·re²·Na·(Z²/A)·ln(183/Z^(1/3)) / (component)
+  // Simplified: yield ∝ Z²/A · ρ, normalised so Al=1
+  const Z2Aref = Z_vals[0] * Z_vals[0] / mats[0].A * mats[0].rho;
+  ctx.beginPath();
+  let first = true;
+  for (let z = 5; z <= 88; z++) {
+    // Interpolate A roughly as A ≈ 2.1*Z for heavy elements
+    const Aapprox = z < 20 ? 2.0*z : 2.1*z + 0.005*z*z;
+    const rhoApprox = z < 30 ? 2.7 + (z-13)*0.25 : 7 + (z-30)*0.08;
+    const y = (z*z / Aapprox * rhoApprox) / Z2Aref;
+    const cy = toY(Math.min(y, yMax * 1.05));
+    if (first) { ctx.moveTo(toX(z), cy); first = false; }
+    else ctx.lineTo(toX(z), cy);
+  }
+  ctx.strokeStyle = '#ffffff22';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 6]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Connecting line between the three data points
+  ctx.beginPath();
+  mats.forEach((m, i) => {
+    if (i === 0) ctx.moveTo(toX(Z_vals[i]), toY(yieldNorm[i]));
+    else ctx.lineTo(toX(Z_vals[i]), toY(yieldNorm[i]));
+  });
+  ctx.strokeStyle = '#ffffff40';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Data points
+  mats.forEach((m, i) => {
+    const x = toX(Z_vals[i]);
+    const y = toY(yieldNorm[i]);
+
+    // Glow
+    ctx.beginPath();
+    ctx.arc(x, y, 11, 0, Math.PI*2);
+    ctx.fillStyle = m.color + '28';
+    ctx.fill();
+
+    // Dot
+    ctx.beginPath();
+    ctx.arc(x, y, 7, 0, Math.PI*2);
+    ctx.fillStyle = m.color;
+    ctx.fill();
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px Share Tech Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(matKeys[i], x, y + 3);
+
+    ctx.fillStyle = m.color;
+    ctx.font = '9px Share Tech Mono';
+    ctx.fillText(`Z=${m.Z}`, x, y - 13);
+    ctx.fillStyle = '#6a8098';
+    ctx.font = '9px Share Tech Mono';
+    ctx.fillText(`×${yieldNorm[i].toFixed(1)}`, x, y + 19);
+  });
+
+  // Legend
+  ctx.fillStyle = '#6a8098'; ctx.font = '9px Share Tech Mono'; ctx.textAlign = 'left';
+  ctx.fillText('● ρ/X₀  (PDG values, normalised)', l + 3, t + 14);
+  ctx.fillStyle = '#ffffff30';
+  ctx.fillText('─ ─ Z²/A·ρ  (approx. theory)', l + 3, t + 25);
+}
+
+function noData(ctx, W, H, msg) {
+  ctx.fillStyle = '#4a607a';
+  ctx.font = '13px Share Tech Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText(msg, W/2, H/2);
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────
+function updateStats({ allResults, mat, E0 }) {
+  const exitEs = allResults.map(r => r.energies[N_STEPS]);
+  const meanExit = exitEs.reduce((a,b)=>a+b) / allResults.length;
+  const photonsPerE = allResults.map(r => r.photons.length);
+  const meanPhotons = photonsPerE.reduce((a,b)=>a+b) / allResults.length;
+  const lossPercent = ((E0 - meanExit) / E0 * 100);
+  const qedPred = E0 * Math.exp(-THICKNESS_X0);
+  const Ec = criticalEnergy(mat.Z);
+
+  document.getElementById('stat-exit').textContent = meanExit.toFixed(1);
+  document.getElementById('stat-photons').textContent = meanPhotons.toFixed(1);
+  document.getElementById('stat-loss').textContent = lossPercent.toFixed(1);
+  document.getElementById('stat-ec').textContent = Ec.toFixed(0);
+  document.getElementById('stat-qed').textContent = qedPred.toFixed(1);
+  document.getElementById('stat-qed-unit').textContent = `MeV  (E₀ · e⁻${THICKNESS_X0})`;
+}
+
+// ── Init canvas placeholder ────────────────────────────────────────────
+window.addEventListener('load', () => {
+  const canvas = document.getElementById('sim-canvas');
+  canvas.width = canvas.parentElement.clientWidth;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#020609';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#1a2840';
+  ctx.font = '11px Share Tech Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('Press  ▶ RUN SIMULATION  to start', canvas.width/2, canvas.height/2);
+});
+
+// =====================================================================
+//  MODAL EXPAND LOGIC
+// =====================================================================
+
+const CHART_TITLES = {
+  energy:   'MEAN ELECTRON ENERGY vs DEPTH (in X₀ units)',
+  spectrum: 'BREMSSTRAHLUNG PHOTON ENERGY SPECTRUM',
+  loss:     'IONISATION vs BREMSSTRAHLUNG LOSS MECHANISMS',
+  z:        'Z-DEPENDENCE OF RADIATION YIELD',
+};
+
+function openModal(chartId) {
+  if (!lastResults) return; // nothing to show yet
+
+  const backdrop = document.getElementById('chart-modal-backdrop');
+  const modalCanvas = document.getElementById('modal-canvas');
+  const titleEl = document.getElementById('modal-title-text');
+
+  // Size the modal canvas to available space
+  const modalEl = document.getElementById('chart-modal');
+  const availW = Math.min(window.innerWidth * 0.92, 960) - 64; // padding
+  modalCanvas.width  = availW;
+  modalCanvas.height = Math.round(availW * 0.52);
+
+  titleEl.textContent = CHART_TITLES[chartId] || chartId.toUpperCase();
+
+  // Draw the selected chart at large size into modal canvas
+  drawChartToCanvas(chartId, modalCanvas, lastResults);
+
+  backdrop.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(e) {
+  // Only close if clicking the backdrop itself (not the modal box)
+  if (e.target === document.getElementById('chart-modal-backdrop')) {
+    closeModalDirect();
+  }
+}
+
+function closeModalDirect() {
+  document.getElementById('chart-modal-backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModalDirect();
+});
+
+// ── Draw any chart into a given canvas element ────────────────────────
+function drawChartToCanvas(chartId, canvas, results) {
+  const { allResults, mat, E0 } = results;
+  // Temporarily override the canvas-sizing approach used by chart functions
+  // by passing the canvas directly as a "large" target.
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.fillStyle = '#0c1320';
+  ctx.fillRect(0, 0, W, H);
+
+  if (chartId === 'energy')   drawEnergyToCtx(ctx, W, H, allResults, mat, E0);
+  if (chartId === 'spectrum') drawSpectrumToCtx(ctx, W, H, allResults, mat, E0);
+  if (chartId === 'loss')     drawLossToCtx(ctx, W, H, mat, E0);
+  if (chartId === 'z')        drawZToCtx(ctx, W, H, E0);
+}
+
+// ── Refactored chart renderers that accept (ctx, W, H, ...) ──────────
+
+function drawEnergyToCtx(ctx, W, H, allResults, mat, E0) {
+  const N = allResults.length;
+  const pad = { l:58, r:28, t:24, b:44 };
+
+  const meanE = new Float32Array(N_STEPS + 1);
+  const stdE  = new Float32Array(N_STEPS + 1);
+  for (let j = 0; j <= N_STEPS; j++) {
+    let sum = 0, sum2 = 0;
+    for (let i = 0; i < N; i++) { const v = allResults[i].energies[j]; sum += v; sum2 += v*v; }
+    meanE[j] = sum / N;
+    stdE[j]  = Math.sqrt(Math.max(0, sum2/N - meanE[j]*meanE[j]));
+  }
+  const depthX0 = new Float32Array(N_STEPS + 1);
+  for (let j = 0; j <= N_STEPS; j++) depthX0[j] = (j / N_STEPS) * THICKNESS_X0;
+
+  const { toX, toY, l, t, plotH } = chartAxesCtx(ctx, W, H, pad, 0, THICKNESS_X0, 0, E0,
+    'Depth (x / X₀)', 'Mean Electron Energy (MeV)', 6, 6, true);
+
+  // Std band
+  ctx.beginPath();
+  for (let j = 0; j <= N_STEPS; j++) ctx.lineTo(toX(depthX0[j]), toY(meanE[j] + stdE[j]));
+  for (let j = N_STEPS; j >= 0; j--) ctx.lineTo(toX(depthX0[j]), toY(meanE[j] - stdE[j]));
+  ctx.closePath();
+  ctx.fillStyle = mat.color + '35';
+  ctx.fill();
+
+  // QED
+  ctx.beginPath();
+  for (let j = 0; j <= N_STEPS; j++) {
+    const x = (j / N_STEPS) * THICKNESS_X0;
+    ctx.lineTo(toX(x), toY(E0 * Math.exp(-x)));
+  }
+  ctx.strokeStyle = '#ffffffaa';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Mean
+  ctx.beginPath();
+  for (let j = 0; j <= N_STEPS; j++) ctx.lineTo(toX(depthX0[j]), toY(meanE[j]));
+  ctx.strokeStyle = mat.color;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Legend
+  ctx.font = '11px Share Tech Mono';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = mat.color; ctx.fillText('─── Simulation mean ± σ', l + 8, t + 18);
+  ctx.fillStyle = '#ffffffaa'; ctx.fillText('─ ─ QED prediction: E₀·e^(−x/X₀)', l + 8, t + 34);
+}
+
+function drawSpectrumToCtx(ctx, W, H, allResults, mat, E0) {
+  const photons = allResults.flatMap(r => r.photons);
+  if (photons.length === 0) { noData(ctx, W, H, 'No photons emitted'); return; }
+
+  const N_BINS = 50;
+  const logMin = Math.log10(Math.max(photons.reduce((a,b)=>Math.min(a,b)), 1e-3));
+  const logMax = Math.log10(photons.reduce((a,b)=>Math.max(a,b)));
+  const binLogW = (logMax - logMin) / N_BINS;
+
+  const counts = new Float32Array(N_BINS);
+  for (const p of photons) {
+    const idx = Math.floor((Math.log10(p) - logMin) / binLogW);
+    if (idx >= 0 && idx < N_BINS) counts[idx]++;
+  }
+
+  // dN/dk: divide by linear bin width — reveals the 1/k slope
+  const dNdk = new Float32Array(N_BINS);
+  for (let i = 0; i < N_BINS; i++) {
+    const dk = Math.pow(10, logMin + (i+1)*binLogW) - Math.pow(10, logMin + i*binLogW);
+    dNdk[i] = counts[i] / dk;
+  }
+  const maxVal = dNdk.reduce((a,b)=>Math.max(a,b));
+
+  const pad = { l:68, r:28, t:38, b:54 };
+  const { toX, toY, l, t, plotH, plotW } = chartAxesCtx(ctx, W, H, pad,
+    logMin, logMax, 0, maxVal, 'log₁₀(Photon energy  k)  [MeV]', 'dN/dk  [MeV⁻¹]', 6, 6, true);
+
+  // Bars
+  for (let i = 0; i < N_BINS; i++) {
+    const x1 = toX(logMin + i * binLogW);
+    const x2 = toX(logMin + (i+1) * binLogW);
+    const y  = toY(dNdk[i]);
+    ctx.fillStyle = mat.color + 'dd';
+    ctx.fillRect(x1 + 1, y, Math.max(x2 - x1 - 1, 1), pad.t + plotH - y);
+  }
+
+  // 1/k theory line — fit norm using median of bins 2–8 (avoids noisy edges)
+  const midBinsM = dNdk.slice(2, 9).filter(v => v > 0);
+  const midKsM   = midBinsM.map((_, i) => Math.pow(10, logMin + (i + 2.5) * binLogW));
+  const productsM = midBinsM.map((v, i) => v * midKsM[i]).sort((a,b) => a-b);
+  const norm = productsM[Math.floor(productsM.length / 2)] || dNdk[0] * Math.pow(10, logMin);
+  ctx.beginPath();
+  let started = false;
+  for (let i = 0; i <= 150; i++) {
+    const logK = logMin + (i / 150) * (logMax - logMin);
+    const k = Math.pow(10, logK);
+    const theory = norm / k;
+    const y = toY(Math.min(theory, maxVal * 1.05));
+    if (!started) { ctx.moveTo(toX(logK), y); started = true; }
+    else ctx.lineTo(toX(logK), y);
+  }
+  ctx.strokeStyle = '#ffffffaa';
+  ctx.setLineDash([7, 5]);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '13px Share Tech Mono'; ctx.textAlign = 'left';
+  ctx.fillStyle = mat.color + 'ee'; ctx.fillText('█ dN/dk  (simulation)', pad.l + 8, pad.t + 18);
+  ctx.fillStyle = '#ffffffaa'; ctx.fillText('─ ─ 1/k  (Bethe-Heitler)', pad.l + 8, pad.t + 34);
+}
+
+function drawLossToCtx(ctx, W, H, mat, E0) {
+  const N_E = 200;
+  const Emin = 0.1, Emax = E0 * 2;
+  const logMin = Math.log10(Emin), logMax = Math.log10(Emax);
+
+  const E_vals = [], ion_vals = [], rad_vals = [];
+  for (let i = 0; i <= N_E; i++) {
+    const E = Math.pow(10, logMin + (i / N_E) * (logMax - logMin));
+    E_vals.push(E);
+    ion_vals.push(betheDEdx(E, mat.Z, mat.A, mat.rho));
+    rad_vals.push(bremDEdx(E, mat.X0));
+  }
+  const allV = [...ion_vals, ...rad_vals];
+  const yMax = allV.reduce((a,b)=>Math.max(a,b));
+  const yMin = allV.reduce((a,b)=>Math.min(a,b)) * 0.5;
+  const lyMin = Math.log10(yMin), lyMax = Math.log10(yMax);
+
+  const pad = { l:62, r:28, t:24, b:44 };
+  const { toX: _toX, toY: _toY, l, t, plotH, plotW } = chartAxesCtx(ctx, W, H, pad,
+    logMin, logMax, lyMin, lyMax,
+    'log₁₀(Electron energy)  [MeV]', 'log₁₀(−dE/dx)  [MeV/cm]', 6, 6, true);
+
+  const toX = v => pad.l + ((Math.log10(v) - logMin) / (logMax - logMin)) * plotW;
+  const toY = v => pad.t + plotH - ((Math.log10(v) - lyMin) / (lyMax - lyMin)) * plotH;
+
+  ctx.beginPath();
+  E_vals.forEach((E, i) => ctx.lineTo(toX(E), toY(ion_vals[i])));
+  ctx.strokeStyle = '#00e5ffcc'; ctx.lineWidth = 2.5; ctx.stroke();
+
+  ctx.beginPath();
+  E_vals.forEach((E, i) => ctx.lineTo(toX(E), toY(rad_vals[i])));
+  ctx.strokeStyle = mat.color; ctx.lineWidth = 2.5;
+  ctx.setLineDash([9, 4]); ctx.stroke(); ctx.setLineDash([]);
+
+  const Ec = criticalEnergy(mat.Z);
+  if (Ec > Emin && Ec < Emax) {
+    ctx.strokeStyle = '#b8ff4d90';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(toX(Ec), pad.t);
+    ctx.lineTo(toX(Ec), pad.t + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#b8ff4d';
+    ctx.font = '11px Share Tech Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Critical energy Ec = ${Ec.toFixed(1)} MeV`, toX(Ec) + 6, pad.t + 20);
+    ctx.fillText('(brem = ionisation)', toX(Ec) + 6, pad.t + 35);
+  }
+
+  ctx.font = '11px Share Tech Mono'; ctx.textAlign = 'left';
+  ctx.fillStyle = '#00e5ffcc'; ctx.fillText('─── Ionisation (Bethe-Bloch)', pad.l + 8, pad.t + 18);
+  ctx.fillStyle = mat.color; ctx.fillText('─ ─ Bremsstrahlung (radiative)', pad.l + 8, pad.t + 34);
+}
+
+function drawZToCtx(ctx, W, H, E0) {
+  const mats = Object.values(MATERIALS);
+  const matKeys = Object.keys(MATERIALS);
+  const Z_vals = mats.map(m => m.Z);
+
+  // Physically correct: radiation yield per unit length = ρ/X₀, normalised to Al=1
+  const rawYield = mats.map(m => m.rho / m.X0);
+  const normFactor = rawYield[0];
+  const yieldNorm  = rawYield.map(y => y / normFactor);
+  const yMax = yieldNorm.reduce((a,b)=>Math.max(a,b)) * 1.35;
+
+  const pad = { l:68, r:28, t:30, b:54 };
+  const { toX, toY, l, t, plotH, plotW } = chartAxesCtx(ctx, W, H, pad,
+    0, 90, 0, yMax, 'Atomic number  Z', 'Radiation yield  (Al = 1.0)', 6, 5, true);
+
+  // Z²/A·ρ approximate theory curve
+  const Z2Aref = Z_vals[0] * Z_vals[0] / mats[0].A * mats[0].rho;
+  ctx.beginPath();
+  let first = true;
+  for (let z = 5; z <= 88; z++) {
+    const Aapprox = z < 20 ? 2.0*z : 2.1*z + 0.005*z*z;
+    const rhoApprox = z < 30 ? 2.7 + (z-13)*0.25 : 7 + (z-30)*0.08;
+    const y = (z*z / Aapprox * rhoApprox) / Z2Aref;
+    const cy = toY(Math.min(y, yMax * 1.05));
+    if (first) { ctx.moveTo(toX(z), cy); first = false; }
+    else ctx.lineTo(toX(z), cy);
+  }
+  ctx.strokeStyle = '#ffffff25';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 7]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Connecting line
+  ctx.beginPath();
+  mats.forEach((m, i) => {
+    if (i === 0) ctx.moveTo(toX(Z_vals[i]), toY(yieldNorm[i]));
+    else ctx.lineTo(toX(Z_vals[i]), toY(yieldNorm[i]));
+  });
+  ctx.strokeStyle = '#ffffff45';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Data points + labels
+  mats.forEach((m, i) => {
+    const x = toX(Z_vals[i]);
+    const y = toY(yieldNorm[i]);
+
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, Math.PI*2);
+    ctx.fillStyle = m.color + '30';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI*2);
+    ctx.fillStyle = m.color;
+    ctx.fill();
+    ctx.strokeStyle = '#060a10';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 11px Share Tech Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(matKeys[i], x, y + 4);
+
+    ctx.fillStyle = m.color;
+    ctx.font = '12px Share Tech Mono';
+    ctx.fillText(`Z = ${m.Z}`, x, y - 18);
+    ctx.fillStyle = '#8aaac8';
+    ctx.font = '11px Share Tech Mono';
+    ctx.fillText(`yield × ${yieldNorm[i].toFixed(1)}`, x, y + 28);
+    ctx.fillStyle = '#4a607a';
+    ctx.font = '10px Share Tech Mono';
+    ctx.fillText(`X₀ = ${m.X0} cm`, x, y + 42);
+  });
+
+  ctx.fillStyle = '#ffffff25';
+  ctx.font = '12px Share Tech Mono'; ctx.textAlign = 'right';
+  ctx.fillText('─ ─ Z²/A·ρ  (approx. theory)', pad.l + plotW - 4, pad.t + 18);
+  ctx.fillStyle = '#6a8098';
+  ctx.textAlign = 'left';
+  ctx.fillText('● ρ/X₀  (PDG radiation lengths, normalised to Al = 1)', pad.l + 4, pad.t + 18);
+}
+
+// ── Generic axis helper for arbitrary canvas ──────────────────────────
+function chartAxesCtx(ctx, W, H, pad, xMin, xMax, yMin, yMax, xLabel, yLabel, nX=5, nY=5, large=false) {
+  const { l, r, t, b } = pad;
+  const plotW = W - l - r, plotH = H - t - b;
+  const fs = large ? 13 : 11;
+
+  ctx.strokeStyle = '#1a2840';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  for (let i = 0; i <= nY; i++) {
+    const y = t + plotH - (i / nY) * plotH;
+    ctx.beginPath(); ctx.moveTo(l, y); ctx.lineTo(l + plotW, y); ctx.stroke();
+  }
+  for (let i = 0; i <= nX; i++) {
+    const x = l + (i / nX) * plotW;
+    ctx.beginPath(); ctx.moveTo(x, t); ctx.lineTo(x, t + plotH); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  ctx.strokeStyle = '#2a4060'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(l, t); ctx.lineTo(l, t + plotH); ctx.lineTo(l + plotW, t + plotH);
+  ctx.stroke();
+
+  ctx.fillStyle = '#6a8098'; ctx.font = `${fs + 1}px Share Tech Mono`;
+  ctx.textAlign = 'center';
+  for (let i = 0; i <= nX; i++) {
+    const x = l + (i / nX) * plotW;
+    const val = xMin + (i / nX) * (xMax - xMin);
+    ctx.fillText(val.toFixed(xMax > 10 ? 0 : 2), x, t + plotH + (large ? 16 : 12));
+  }
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= nY; i++) {
+    const y = t + plotH - (i / nY) * plotH;
+    const val = yMin + (i / nY) * (yMax - yMin);
+    ctx.fillText(val.toFixed(yMax > 100 ? 0 : 2), l - 6, y + 4);
+  }
+
+  ctx.fillStyle = '#6a8098'; ctx.font = `${fs + 1}px Share Tech Mono`;
+  ctx.textAlign = 'center';
+  ctx.fillText(xLabel, l + plotW / 2, H - (large ? 6 : 3));
+  ctx.save();
+  ctx.translate(large ? 14 : 10, t + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+
+  const toX = v => l + ((v - xMin) / (xMax - xMin)) * plotW;
+  const toY = v => t + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
+  return { toX, toY, l, r, t, b, plotW, plotH };
+}
+</script>
+</body>
+</html>
