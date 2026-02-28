@@ -854,17 +854,47 @@ function drawCanvas({ allResults, mat, E0, N }) {
   ctx.lineTo(tx1 - 2, PAD_T + plotH/2 + 4);
   ctx.fill();
 
-  // Axis labels
+  // Axis labels + ticks
   ctx.fillStyle = '#4a607a';
-  ctx.font = '11px Share Tech Mono';
-  ctx.fillText('x (cm)', PAD_L + plotW * 0.4, H - 4);
+  ctx.font = '14px Share Tech Mono';
+  ctx.textAlign = 'center';
+
+  // X ticks: cm primary, X0 secondary
+  const nXticks = 5;
+  for (let i = 0; i <= nXticks; i++) {
+    const xcm = (i / nXticks) * thick_cm;
+    const px  = scaleX(xcm);
+    ctx.strokeStyle = '#1a2840';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, PAD_T + plotH);
+    ctx.lineTo(px, PAD_T + plotH + 4);
+    ctx.stroke();
+    // cm label — primary, brighter
+    ctx.fillStyle = '#6a8098';
+    ctx.font = '14px Share Tech Mono';
+    ctx.fillText(xcm.toFixed(2) + ' cm', px, H - 14);
+    // X0 label — secondary, dimmer
+    ctx.fillStyle = '#2a4060';
+    ctx.font = '14px Share Tech Mono';
+    ctx.fillText(`(${(i / nXticks * THICKNESS_X0).toFixed(1)}X₀)`, px, H - 4);
+  }
+
+  // X-axis label
+  ctx.fillStyle = '#4a607a';
+  ctx.textAlign = 'left';
+  ctx.fillText('depth →  cm  /  X₀', PAD_L, H - 4);
+
+  // Y-axis label
   ctx.save();
   ctx.translate(14, PAD_T + plotH/2);
   ctx.rotate(-Math.PI/2);
-  ctx.fillText('transverse (cm)', -40, 0);
+  ctx.textAlign = 'center';
+  ctx.fillText('transverse (cm)', 0, 0);
   ctx.restore();
 
-  label.innerHTML = `${mat.name.toUpperCase()} · Z=${mat.Z} · X₀=${mat.X0} cm`;
+
+  label.innerHTML = `${mat.name.toUpperCase()} · Z=${mat.Z} · X₀=${mat.X0} cm · target = ${THICKNESS_X0}X₀ = ${thick_cm.toFixed(3)} cm`;
 }
 
 function lerp(a, b, t) { return a + (b - a) * t; }
@@ -917,7 +947,7 @@ function chartAxes(ctx, W, H, pad, xMin, xMax, yMin, yMax, xLabel, yLabel, nXTic
 
   // Tick labels
   ctx.fillStyle = '#4a607a';
-  ctx.font = '11px Share Tech Mono';
+  ctx.font = '14px Share Tech Mono';
   ctx.textAlign = 'center';
   for (let i = 0; i <= nXTicks; i++) {
     const x = l + (i / nXTicks) * plotW;
@@ -933,7 +963,7 @@ function chartAxes(ctx, W, H, pad, xMin, xMax, yMin, yMax, xLabel, yLabel, nXTic
 
   // Axis labels
   ctx.fillStyle = '#4a607a';
-  ctx.font = '11px Share Tech Mono';
+  ctx.font = '14px Share Tech Mono';
   ctx.textAlign = 'center';
   ctx.fillText(xLabel, l + plotW/2, H - 1);
   ctx.save();
